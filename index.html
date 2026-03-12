@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Ночной Дом — Хоррор</title>
+  <style>
+    :root {
+      --bg: #07090f;
+      --panel: rgba(8, 12, 20, 0.78);
+      --text: #dfe8ff;
+      --danger: #b31f1f;
+      --accent: #9ba7d9;
+      --good: #6cb16c;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      color: var(--text);
+      font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+    #gameCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      image-rendering: auto;
+      background: #000;
+      touch-action: none;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(15,20,35,0.75) 0%, rgba(0,0,0,0.96) 75%);
+      z-index: 20;
+      transition: opacity 0.4s ease;
+      padding: 16px;
+    }
+    .overlay.hidden { opacity: 0; pointer-events: none; }
+    .panel {
+      max-width: 720px;
+      width: min(92vw, 720px);
+      border: 1px solid rgba(180, 190, 255, 0.25);
+      background: var(--panel);
+      backdrop-filter: blur(4px);
+      padding: 22px;
+      border-radius: 12px;
+      box-shadow: 0 0 32px rgba(0,0,0,0.6), inset 0 0 26px rgba(130,150,255,0.09);
+    }
+    h1, h2 { margin: 0 0 12px; letter-spacing: 1px; text-transform: uppercase; }
+    p { line-height: 1.4; margin: 8px 0; opacity: 0.95; }
+    .btn {
+      margin-top: 14px;
+      background: #141c2f;
+      border: 1px solid #5f6d9e;
+      color: #f1f4ff;
+      padding: 11px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: 0.2s ease;
+    }
+    .btn:hover, .btn:focus-visible { transform: translateY(-1px); background: #1f2a45; }
+
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto 1fr;
+      gap: 8px;
+    }
+    .hud-box {
+      background: rgba(8, 10, 18, 0.62);
+      border: 1px solid rgba(179, 191, 255, 0.25);
+      border-radius: 8px;
+      padding: 9px 11px;
+      text-shadow: 0 0 8px #000;
+    }
+    #objective { max-width: min(65vw, 600px); }
+    #inventory { justify-self: end; max-width: min(34vw, 320px); }
+    #msg {
+      align-self: start;
+      grid-column: 1 / span 2;
+      justify-self: center;
+      min-height: 28px;
+      padding: 8px 14px;
+      max-width: 72vw;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #msg.show { opacity: 1; }
+    #crosshair {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: 13px;
+      height: 13px;
+      margin-left: -6.5px;
+      margin-top: -6.5px;
+      z-index: 12;
+      pointer-events: none;
+      opacity: 0.8;
+    }
+    #crosshair::before, #crosshair::after {
+      content: "";
+      position: absolute;
+      background: rgba(232,240,255,0.85);
+      box-shadow: 0 0 8px rgba(230,230,255,0.6);
+    }
+    #crosshair::before { left: 6px; top: 0; width: 1px; height: 13px; }
+    #crosshair::after { top: 6px; left: 0; width: 13px; height: 1px; }
+
+    #flash {
+      position: fixed;
+      inset: 0;
+      background: rgba(255,255,255,0.92);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 18;
+      transition: opacity 0.1s;
+    }
+
+    #mobileControls {
+      position: fixed;
+      inset: auto 0 0 0;
+      display: none;
+      z-index: 14;
+      pointer-events: none;
+      padding: 10px;
+      justify-content: space-between;
+      align-items: end;
+      gap: 12px;
+    }
+    .cluster {
+      display: grid;
+      grid-template-columns: repeat(3, 62px);
+      grid-template-rows: repeat(2, 62px);
+      gap: 7px;
+      pointer-events: auto;
+    }
+    .cluster.right { grid-template-columns: repeat(2, 62px); grid-template-rows: repeat(2, 62px); }
+    .touch {
+      border-radius: 10px;
+      border: 1px solid rgba(190,200,255,0.35);
+      background: rgba(20,26,44,0.68);
+      color: #e8edff;
+      font-weight: 700;
+      font-size: 14px;
+      touch-action: none;
+      user-select: none;
+    }
+    .touch:active { background: rgba(38,46,78,0.92); }
+    .ghost-red {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(200, 10, 10, 0) 30%, rgba(120, 0, 0, 0.45) 100%);
+      pointer-events: none;
+      opacity: 0;
+      z-index: 11;
+      transition: opacity 0.2s;
+    }
+
+    @media (max-width: 920px), (pointer: coarse) {
+      #mobileControls { display: flex; }
+      #inventory, #objective { max-width: 88vw; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="hud" hidden>
+    <div id="objective" class="hud-box">Задание: ...</div>
+    <div id="inventory" class="hud-box">Инвентарь: пусто</div>
+    <div id="msg" class="hud-box"></div>
+  </div>
+  <div id="crosshair" hidden></div>
+  <div id="flash"></div>
+  <div id="danger" class="ghost-red"></div>
+
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <h1>Ночной Дом</h1>
+      <p>Ты просыпаешься в заброшенном доме. Электричество едва живо, коридоры бесконечно темны, а за стенами слышен шёпот.</p>
+      <p><b>Управление ПК:</b> WASD — движение, мышь — поворот, E — взаимодействие, Shift — бег.</p>
+      <p><b>Телефон:</b> сенсорные кнопки внизу экрана.</p>
+      <p>Собери предметы, восстанови питание, открой запертые двери и найди код от выхода. Не дай сущности догнать тебя.</p>
+      <button id="playBtn" class="btn">Играть</button>
+    </div>
+  </div>
+
+  <div id="gameOver" class="overlay hidden">
+    <div class="panel">
+      <h2 style="color:#ff7070">ТЕБЯ НАШЛИ</h2>
+      <p>Сущность догнала тебя в темноте. Дом забрал ещё одну жизнь.</p>
+      <button id="retryBtn" class="btn">Начать заново</button>
+    </div>
+  </div>
+
+  <div id="victory" class="overlay hidden">
+    <div class="panel">
+      <h2 style="color:#8ec78e">ТЫ ВЫБРАЛСЯ</h2>
+      <p>Последняя дверь хлопнула за спиной. Дождь снаружи кажется самым красивым звуком в мире.</p>
+      <button id="againBtn" class="btn">Сыграть ещё раз</button>
+    </div>
+  </div>
+
+  <div id="mobileControls">
+    <div class="cluster">
+      <button class="touch" data-key="KeyA" style="grid-column:1;grid-row:2">◀</button>
+      <button class="touch" data-key="KeyW" style="grid-column:2;grid-row:1">▲</button>
+      <button class="touch" data-key="KeyS" style="grid-column:2;grid-row:2">▼</button>
+      <button class="touch" data-key="KeyD" style="grid-column:3;grid-row:2">▶</button>
+    </div>
+    <div class="cluster right">
+      <button class="touch" data-action="turnLeft">⟲</button>
+      <button class="touch" data-action="turnRight">⟳</button>
+      <button class="touch" data-key="ShiftLeft">БЕГ</button>
+      <button class="touch" data-action="interact">E</button>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      const menu = document.getElementById('menu');
+      const playBtn = document.getElementById('playBtn');
+      const hud = document.getElementById('hud');
+      const crosshair = document.getElementById('crosshair');
+      const objectiveEl = document.getElementById('objective');
+      const inventoryEl = document.getElementById('inventory');
+      const msgEl = document.getElementById('msg');
+      const flashEl = document.getElementById('flash');
+      const dangerEl = document.getElementById('danger');
+      const gameOverEl = document.getElementById('gameOver');
+      const victoryEl = document.getElementById('victory');
+      const retryBtn = document.getElementById('retryBtn');
+      const againBtn = document.getElementById('againBtn');
+
+      let w = 0, h = 0;
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+        w = Math.floor(window.innerWidth * dpr);
+        h = Math.floor(window.innerHeight * dpr);
+        canvas.width = w;
+        canvas.height = h;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      const MAP = [
+        "11111111111111111111",
+        "10000000001000000001",
+        "10111111101011101101",
+        "10000000100010001001",
+        "10111100111110001001",
+        "10000100000000101001",
+        "11110101111110101001",
+        "10000101000010100001",
+        "10111101011110111101",
+        "10000001010000100001",
+        "10111111010111101111",
+        "10000000010000000001",
+        "10111111111111111001",
+        "10000000000000001001",
+        "11101111111111001001",
+        "10001000000001000001",
+        "10111011101101111101",
+        "10000010001000000001",
+        "10111110111111111001",
+        "11111111111111111111"
+      ];
+      const MAP_W = MAP[0].length;
+      const MAP_H = MAP.length;
+
+      const state = {
+        running: false,
+        won: false,
+        lost: false,
+        keys: {},
+        player: { x: 1.7, y: 1.7, a: 0, bob: 0 },
+        inventory: new Set(),
+        task: 0,
+        electricity: false,
+        basementUnlocked: false,
+        lockedRoomUnlocked: false,
+        exitUnlocked: false,
+        codeFound: false,
+        interactions: [],
+        msgTimer: 0,
+        flicker: 0,
+        ambientTimer: 0,
+        scareTimer: 6,
+        screamerTimer: 0,
+        heart: 0,
+        monster: { x: 15.5, y: 15.5, visible: false, timer: 0, chase: false, speed: 0.88 },
+        finalPhase: false,
+        notesRead: 0
+      };
+
+      const tasks = [
+        'Найди фонарик в прихожей.',
+        'Найди предохранитель и восстанови электричество в щитке.',
+        'Отыщи ключ от подвала и открой дверь вниз.',
+        'Собери 3 ритуальных предмета в подвале.',
+        'Открой запертую комнату на 2-м этаже.',
+        'Найди записку с кодом выхода и разблокируй входную дверь.',
+        'Выбеги через входную дверь и выживи.'
+      ];
+
+      const itemNames = {
+        flashlight: 'Фонарик',
+        fuse: 'Предохранитель',
+        basementKey: 'Ключ от подвала',
+        relic1: 'Реликвия: Печать',
+        relic2: 'Реликвия: Черепок',
+        relic3: 'Реликвия: Медальон',
+        exitCode: 'Код 7391'
+      };
+
+      function resetInteractions() {
+        state.interactions = [
+          { id: 'flashlight', type: 'item', item: 'flashlight', x: 2.4, y: 2.4, text: 'Старый фонарик лежит на тумбе.' },
+          { id: 'fuse', type: 'item', item: 'fuse', x: 12.5, y: 2.5, text: 'Ржавый предохранитель найден.' },
+          { id: 'box', type: 'switch', x: 9.5, y: 4.5, text: 'Электрический щиток', requireItem: 'fuse' },
+          { id: 'basementKey', type: 'item', item: 'basementKey', x: 5.5, y: 11.4, text: 'Ключ пахнет сыростью.' },
+          { id: 'basementDoor', type: 'door', x: 9.5, y: 10.5, name: 'Дверь в подвал', locked: true, condition: () => state.basementUnlocked },
+          { id: 'relic1', type: 'item', item: 'relic1', x: 14.5, y: 16.5, text: 'Находка отзывается холодом.' },
+          { id: 'relic2', type: 'item', item: 'relic2', x: 17.5, y: 15.5, text: 'Металлический звон режет слух.' },
+          { id: 'relic3', type: 'item', item: 'relic3', x: 16.5, y: 18.5, text: 'Кажется, это часть ритуала.' },
+          { id: 'lockedRoomDoor', type: 'door', x: 13.5, y: 8.5, name: 'Запертая комната', locked: true, condition: () => state.lockedRoomUnlocked },
+          { id: 'noteCode', type: 'note', x: 15.5, y: 7.5, note: 'На бумаге криво написано: "Выход: 7391"', gives: 'exitCode' },
+          { id: 'exitPanel', type: 'panel', x: 1.6, y: 1.15, text: 'Панель замка у входной двери' }
+        ];
+      }
+
+      function hasItem(name) { return state.inventory.has(name); }
+      function addItem(name) {
+        state.inventory.add(name);
+        showMessage(`Получено: ${itemNames[name] || name}`);
+        playTone(600, 0.07, 'triangle', 0.03);
+      }
+
+      function isWall(x, y) {
+        const mx = Math.floor(x), my = Math.floor(y);
+        if (mx < 0 || my < 0 || mx >= MAP_W || my >= MAP_H) return true;
+        return MAP[my][mx] === '1';
+      }
+
+      function canWalk(x, y) {
+        if (isWall(x, y)) return false;
+        // Door collision
+        for (const i of state.interactions) {
+          if (i.type === 'door' && !i.opened) {
+            const dx = i.x - x, dy = i.y - y;
+            if (dx * dx + dy * dy < 0.18) return false;
+          }
+        }
+        return true;
+      }
+
+      function movePlayer(dt) {
+        const p = state.player;
+        const speed = (state.keys.ShiftLeft ? 2.45 : 1.65) * dt;
+        const rs = 2.4 * dt;
+        if (state.keys.ArrowLeft) p.a -= rs;
+        if (state.keys.ArrowRight) p.a += rs;
+
+        let mx = 0, my = 0;
+        if (state.keys.KeyW) { mx += Math.cos(p.a) * speed; my += Math.sin(p.a) * speed; }
+        if (state.keys.KeyS) { mx -= Math.cos(p.a) * speed; my -= Math.sin(p.a) * speed; }
+        if (state.keys.KeyA) { mx += Math.cos(p.a - Math.PI / 2) * speed; my += Math.sin(p.a - Math.PI / 2) * speed; }
+        if (state.keys.KeyD) { mx += Math.cos(p.a + Math.PI / 2) * speed; my += Math.sin(p.a + Math.PI / 2) * speed; }
+
+        const nx = p.x + mx;
+        const ny = p.y + my;
+        if (canWalk(nx, p.y)) p.x = nx;
+        if (canWalk(p.x, ny)) p.y = ny;
+
+        p.bob += Math.sqrt(mx * mx + my * my) * 7;
+      }
+
+      function raycast(angle) {
+        let dist = 0;
+        let hit = false;
+        let side = 0;
+        const sin = Math.sin(angle), cos = Math.cos(angle);
+        while (!hit && dist < 24) {
+          dist += 0.03;
+          const x = state.player.x + cos * dist;
+          const y = state.player.y + sin * dist;
+          if (isWall(x, y)) {
+            hit = true;
+            const fx = x - Math.floor(x);
+            const fy = y - Math.floor(y);
+            side = (fx < 0.04 || fx > 0.96) ? 1 : ((fy < 0.04 || fy > 0.96) ? 2 : 0);
+          }
+        }
+        return { dist, hit, side };
+      }
+
+      function drawWorld(time) {
+        const p = state.player;
+        const fov = Math.PI / 2.8;
+        const half = h / 2;
+        const bob = Math.sin(p.bob) * 4;
+
+        const sky = ctx.createLinearGradient(0, 0, 0, half);
+        sky.addColorStop(0, '#05070d');
+        sky.addColorStop(1, state.electricity ? '#0f1422' : '#080910');
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, w, half + bob);
+
+        const floor = ctx.createLinearGradient(0, half, 0, h);
+        floor.addColorStop(0, '#13141a');
+        floor.addColorStop(1, '#060608');
+        ctx.fillStyle = floor;
+        ctx.fillRect(0, half + bob, w, half);
+
+        const depth = new Float32Array(w);
+        for (let x = 0; x < w; x++) {
+          const camX = (x / w - 0.5) * fov;
+          const ang = p.a + camX;
+          const hit = raycast(ang);
+          const dist = hit.dist * Math.cos(camX);
+          depth[x] = dist;
+          const wallH = Math.min(h, (h / Math.max(0.001, dist)) * 0.82);
+          const y1 = half - wallH / 2 + bob;
+
+          let shade = Math.max(0.08, 1 - dist / 12);
+          if (!state.electricity) shade *= 0.66;
+          if (state.flicker > 0) shade *= 0.45;
+          if (hit.side === 1) shade *= 0.78;
+          if (hit.side === 2) shade *= 0.87;
+
+          const col = Math.floor(110 * shade);
+          ctx.fillStyle = `rgb(${col},${col + 5},${col + 14})`;
+          ctx.fillRect(x, y1, 1, wallH + 1);
+        }
+
+        drawSprites(depth, time);
+        drawFlashlight();
+      }
+
+      function projectSprite(x, y, depth, color, size = 0.7, pulse = 0) {
+        const p = state.player;
+        const dx = x - p.x;
+        const dy = y - p.y;
+        const dist = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx) - p.a;
+        const a = Math.atan2(Math.sin(ang), Math.cos(ang));
+        const fov = Math.PI / 2.8;
+        if (Math.abs(a) > fov * 0.65 || dist < 0.2) return;
+
+        const sx = (0.5 + a / fov) * w;
+        const spriteH = (h / dist) * size;
+        const spriteW = spriteH * 0.5;
+        const y = h / 2 - spriteH / 2;
+        const x0 = Math.floor(sx - spriteW / 2);
+        const x1 = Math.floor(sx + spriteW / 2);
+        for (let xCol = x0; xCol <= x1; xCol++) {
+          if (xCol < 0 || xCol >= w) continue;
+          if (dist > depth[xCol]) continue;
+          const alpha = Math.max(0, 1 - dist / 10) * (0.8 + pulse);
+          ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${alpha.toFixed(3)})`;
+          ctx.fillRect(xCol, y, 1, spriteH);
+        }
+      }
+
+      function drawSprites(depth, time) {
+        // Items and interactables glow
+        for (const obj of state.interactions) {
+          if (obj.picked) continue;
+          if (obj.type === 'item') projectSprite(obj.x, obj.y, depth, [160, 185, 240], 0.42, 0.12 * Math.sin(time * 0.005));
+          if (obj.type === 'switch') projectSprite(obj.x, obj.y, depth, [220, 210, 130], 0.45, 0.08);
+          if (obj.type === 'note') projectSprite(obj.x, obj.y, depth, [200, 180, 150], 0.4, 0.05);
+        }
+
+        for (const door of state.interactions.filter(i => i.type === 'door' && !i.opened)) {
+          projectSprite(door.x, door.y, depth, [100, 70, 60], 0.9, 0);
+        }
+
+        if (state.monster.visible || state.monster.chase) {
+          const pulse = 0.2 + 0.2 * Math.sin(time * 0.025);
+          projectSprite(state.monster.x, state.monster.y, depth, [200, 28, 35], 1.3, pulse);
+        }
+      }
+
+      function drawFlashlight() {
+        const hasFlash = hasItem('flashlight');
+        const grad = ctx.createRadialGradient(w / 2, h / 2, hasFlash ? 80 : 20, w / 2, h / 2, hasFlash ? Math.min(w, h) * 0.65 : Math.min(w, h) * 0.25);
+        const power = hasFlash ? (state.electricity ? 0.93 : 0.82) : 0.97;
+        grad.addColorStop(0, `rgba(0,0,0,${0.1 + (state.flicker > 0 ? 0.08 : 0)})`);
+        grad.addColorStop(0.55, `rgba(0,0,0,${power - 0.35})`);
+        grad.addColorStop(1, `rgba(0,0,0,${power})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, w, h);
+
+        if (state.screamerTimer > 0) {
+          const a = Math.min(0.48, state.screamerTimer / 0.5);
+          ctx.fillStyle = `rgba(120,0,0,${a})`;
+          ctx.fillRect(0, 0, w, h);
+        }
+      }
+
+      function nearestInteract() {
+        const p = state.player;
+        let best = null;
+        for (const obj of state.interactions) {
+          if (obj.picked) continue;
+          const dx = obj.x - p.x;
+          const dy = obj.y - p.y;
+          const d = Math.hypot(dx, dy);
+          if (d > 1.25) continue;
+          const ang = Math.atan2(dy, dx) - p.a;
+          const front = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
+          if (front < 0.65 && (!best || d < best.d)) best = { obj, d };
+        }
+        return best?.obj || null;
+      }
+
+      function updateTasks() {
+        const relics = ['relic1', 'relic2', 'relic3'].filter(hasItem).length;
+        if (state.task === 0 && hasItem('flashlight')) state.task = 1;
+        if (state.task === 1 && state.electricity) state.task = 2;
+        if (state.task === 2 && state.basementUnlocked) state.task = 3;
+        if (state.task === 3 && relics >= 3) {
+          state.lockedRoomUnlocked = true;
+          state.task = 4;
+          showMessage('Что-то щёлкнуло наверху. Запертая дверь теперь открывается.');
+          scareFlash();
+        }
+        if (state.task === 4 && state.codeFound) {
+          state.task = 5;
+          state.finalPhase = true;
+          state.monster.chase = true;
+          showMessage('Сущность почувствовала твой страх... БЕГИ К ВЫХОДУ!');
+        }
+        if (state.task === 5 && state.exitUnlocked) state.task = 6;
+
+        objectiveEl.textContent = `Задание: ${tasks[Math.min(state.task, tasks.length - 1)]}`;
+      }
+
+      function interact() {
+        const obj = nearestInteract();
+        if (!obj) return showMessage('Здесь нечего делать.');
+
+        if (obj.type === 'item') {
+          obj.picked = true;
+          addItem(obj.item);
+          if (obj.text) showMessage(obj.text);
+        }
+
+        if (obj.type === 'switch') {
+          if (state.electricity) return showMessage('Питание уже восстановлено.');
+          if (!hasItem(obj.requireItem)) return showMessage('Нужен предохранитель.');
+          state.electricity = true;
+          showMessage('Свет в доме оживает и начинает мигать.');
+          playTone(130, 0.4, 'sawtooth', 0.08);
+          scareFlash();
+        }
+
+        if (obj.type === 'door') {
+          if (obj.id === 'basementDoor' && !state.basementUnlocked) {
+            if (hasItem('basementKey')) {
+              state.basementUnlocked = true;
+              obj.opened = true;
+              showMessage('Ты отпер дверь в подвал.');
+              playTone(200, 0.12, 'square', 0.05);
+            } else {
+              showMessage('Дверь в подвал заперта. Нужен ключ.');
+            }
+          } else if (obj.id === 'lockedRoomDoor' && !state.lockedRoomUnlocked) {
+            showMessage('Дверь не поддаётся. Что-то удерживает её...');
+          } else {
+            obj.opened = true;
+            showMessage(`${obj.name} открыта.`);
+          }
+        }
+
+        if (obj.type === 'note') {
+          showMessage(obj.note);
+          obj.picked = true;
+          state.notesRead++;
+          if (obj.gives && !hasItem(obj.gives)) addItem(obj.gives);
+          state.codeFound = true;
+          playTone(760, 0.08, 'triangle', 0.03);
+        }
+
+        if (obj.type === 'panel') {
+          if (!hasItem('exitCode')) return showMessage('Нужен код от панели.');
+          state.exitUnlocked = true;
+          showMessage('Замок щёлкает. Входная дверь открыта!');
+          playTone(820, 0.1, 'square', 0.03);
+          scareFlash();
+        }
+
+        updateTasks();
+      }
+
+      function showMessage(text, t = 2.8) {
+        msgEl.textContent = text;
+        msgEl.classList.add('show');
+        state.msgTimer = t;
+      }
+
+      // Audio
+      let audioCtx = null;
+      let master = null;
+      let noiseNode = null;
+      let heartbeatOsc = null;
+      let heartbeatGain = null;
+
+      function initAudio() {
+        if (audioCtx) return;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        master = audioCtx.createGain();
+        master.gain.value = 0.18;
+        master.connect(audioCtx.destination);
+
+        const rainBuf = audioCtx.createBuffer(1, audioCtx.sampleRate * 2, audioCtx.sampleRate);
+        const arr = rainBuf.getChannelData(0);
+        for (let i = 0; i < arr.length; i++) arr[i] = (Math.random() * 2 - 1) * 0.4;
+        noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = rainBuf;
+        noiseNode.loop = true;
+        const rainFilter = audioCtx.createBiquadFilter();
+        rainFilter.type = 'highpass';
+        rainFilter.frequency.value = 900;
+        const rainGain = audioCtx.createGain();
+        rainGain.gain.value = 0.035;
+        noiseNode.connect(rainFilter).connect(rainGain).connect(master);
+        noiseNode.start();
+
+        heartbeatOsc = audioCtx.createOscillator();
+        heartbeatGain = audioCtx.createGain();
+        heartbeatOsc.type = 'sine';
+        heartbeatOsc.frequency.value = 42;
+        heartbeatGain.gain.value = 0;
+        heartbeatOsc.connect(heartbeatGain).connect(master);
+        heartbeatOsc.start();
+      }
+
+      function playTone(freq, duration = 0.1, type = 'sine', vol = 0.05) {
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain).connect(master);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration + 0.02);
+      }
+
+      function ambientTick(dt) {
+        state.ambientTimer -= dt;
+        if (state.ambientTimer <= 0) {
+          state.ambientTimer = 4 + Math.random() * 7;
+          const r = Math.random();
+          if (r < 0.35) playTone(80 + Math.random() * 40, 0.25, 'sawtooth', 0.03); // distant thud
+          else if (r < 0.7) playTone(260 + Math.random() * 180, 0.2, 'triangle', 0.022); // whisper
+          else playTone(45 + Math.random() * 20, 0.5, 'sine', 0.025); // low hum
+        }
+      }
+
+      function scareFlash() {
+        state.screamerTimer = 0.42;
+        flashEl.style.opacity = '0.92';
+        setTimeout(() => flashEl.style.opacity = '0', 80);
+      }
+
+      function updateMonster(dt) {
+        const p = state.player;
+        const m = state.monster;
+
+        if (!state.finalPhase) {
+          state.scareTimer -= dt;
+          if (state.scareTimer <= 0 && !m.visible) {
+            state.scareTimer = 7 + Math.random() * 10 - state.task * 0.6;
+            const spots = [
+              [p.x + Math.cos(p.a) * (3 + Math.random() * 2), p.y + Math.sin(p.a) * (3 + Math.random() * 2)],
+              [12.5, 9.5], [16.5, 14.5], [6.5, 5.5], [15.5, 7.5]
+            ];
+            const s = spots[Math.floor(Math.random() * spots.length)];
+            m.x = Math.max(1.2, Math.min(MAP_W - 1.2, s[0]));
+            m.y = Math.max(1.2, Math.min(MAP_H - 1.2, s[1]));
+            if (!isWall(m.x, m.y)) {
+              m.visible = true;
+              m.timer = 1.1;
+              playTone(95, 0.25, 'square', 0.06);
+            }
+          }
+          if (m.visible) {
+            m.timer -= dt;
+            if (m.timer <= 0) m.visible = false;
+          }
+        }
+
+        if (m.chase) {
+          const dx = p.x - m.x;
+          const dy = p.y - m.y;
+          const d = Math.hypot(dx, dy);
+          state.heart = Math.max(0, 1 - d / 8);
+          heartbeatGain && (heartbeatGain.gain.value = state.heart * 0.12);
+          if (d > 0.1) {
+            const vx = (dx / d) * m.speed * dt;
+            const vy = (dy / d) * m.speed * dt;
+            if (!isWall(m.x + vx, m.y)) m.x += vx;
+            if (!isWall(m.x, m.y + vy)) m.y += vy;
+          }
+          if (d < 0.6) loseGame();
+          if (Math.random() < 0.0025) playTone(120 + Math.random() * 40, 0.09, 'sawtooth', 0.04);
+        } else {
+          state.heart *= 0.9;
+          heartbeatGain && (heartbeatGain.gain.value = state.heart * 0.08);
+        }
+      }
+
+      function updateUI(dt) {
+        inventoryEl.textContent = 'Инвентарь: ' + (Array.from(state.inventory).map(x => itemNames[x]).join(', ') || 'пусто');
+        if (state.msgTimer > 0) state.msgTimer -= dt;
+        if (state.msgTimer <= 0) msgEl.classList.remove('show');
+        dangerEl.style.opacity = (state.monster.chase ? (0.22 + state.heart * 0.52) : 0).toFixed(2);
+      }
+
+      function updateFlicker(dt) {
+        if (!state.electricity) return state.flicker = 0;
+        state.flicker -= dt;
+        if (state.flicker <= 0 && Math.random() < 0.02) {
+          state.flicker = 0.12 + Math.random() * 0.15;
+          playTone(350, 0.05, 'square', 0.02);
+        }
+      }
+
+      function checkWin() {
+        if (state.task >= 6) {
+          const p = state.player;
+          if (p.x < 2.2 && p.y < 2.2 && state.exitUnlocked) {
+            winGame();
+          }
+        }
+      }
+
+      let last = performance.now();
+      function loop(t) {
+        const dt = Math.min(0.033, (t - last) / 1000);
+        last = t;
+
+        if (state.running && !state.won && !state.lost) {
+          movePlayer(dt);
+          ambientTick(dt);
+          updateMonster(dt);
+          updateFlicker(dt);
+          updateUI(dt);
+          updateTasks();
+          checkWin();
+        }
+
+        if (state.screamerTimer > 0) state.screamerTimer -= dt;
+        drawWorld(t);
+        requestAnimationFrame(loop);
+      }
+      requestAnimationFrame(loop);
+
+      function loseGame() {
+        if (state.lost || state.won) return;
+        state.lost = true;
+        state.running = false;
+        showMessage('Холодная рука сжала твоё горло...', 2);
+        playTone(40, 0.5, 'sawtooth', 0.08);
+        gameOverEl.classList.remove('hidden');
+        document.exitPointerLock?.();
+      }
+
+      function winGame() {
+        if (state.won || state.lost) return;
+        state.won = true;
+        state.running = false;
+        victoryEl.classList.remove('hidden');
+        playTone(520, 0.2, 'triangle', 0.05);
+        setTimeout(() => playTone(760, 0.35, 'triangle', 0.045), 120);
+        document.exitPointerLock?.();
+      }
+
+      function startGame() {
+        initAudio();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+        state.running = true;
+        state.won = false;
+        state.lost = false;
+        state.keys = {};
+        state.inventory = new Set();
+        state.player = { x: 1.7, y: 1.7, a: 0, bob: 0 };
+        state.task = 0;
+        state.electricity = false;
+        state.basementUnlocked = false;
+        state.lockedRoomUnlocked = false;
+        state.exitUnlocked = false;
+        state.codeFound = false;
+        state.msgTimer = 0;
+        state.flicker = 0;
+        state.ambientTimer = 1.2;
+        state.scareTimer = 5.2;
+        state.screamerTimer = 0;
+        state.heart = 0;
+        state.notesRead = 0;
+        state.finalPhase = false;
+        state.monster = { x: 15.5, y: 15.5, visible: false, timer: 0, chase: false, speed: 0.88 };
+
+        resetInteractions();
+        updateTasks();
+        updateUI(0);
+
+        menu.classList.add('hidden');
+        gameOverEl.classList.add('hidden');
+        victoryEl.classList.add('hidden');
+        hud.hidden = false;
+        crosshair.hidden = false;
+        if (window.matchMedia('(pointer:fine)').matches) canvas.requestPointerLock?.();
+        showMessage('Тишина давит на уши. Найди способ выбраться.');
+      }
+
+      playBtn.addEventListener('click', startGame);
+      retryBtn.addEventListener('click', startGame);
+      againBtn.addEventListener('click', startGame);
+
+      document.addEventListener('keydown', (e) => {
+        state.keys[e.code] = true;
+        if (e.code === 'KeyE') interact();
+      });
+      document.addEventListener('keyup', (e) => state.keys[e.code] = false);
+
+      canvas.addEventListener('click', () => {
+        if (!state.running || state.won || state.lost) return;
+        if (document.pointerLockElement !== canvas && window.matchMedia('(pointer:fine)').matches) {
+          canvas.requestPointerLock?.();
+        }
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (document.pointerLockElement === canvas && state.running && !state.won && !state.lost) {
+          state.player.a += e.movementX * 0.0024;
+        }
+      });
+
+      // Mobile buttons
+      const touchButtons = Array.from(document.querySelectorAll('.touch'));
+      const activeActions = new Set();
+
+      function setButton(btn, on) {
+        const key = btn.dataset.key;
+        const action = btn.dataset.action;
+        if (key) state.keys[key] = on;
+        if (action) {
+          if (on) activeActions.add(action);
+          else activeActions.delete(action);
+          if (action === 'interact' && on) interact();
+        }
+      }
+
+      for (const btn of touchButtons) {
+        const start = (e) => { e.preventDefault(); setButton(btn, true); };
+        const end = (e) => { e.preventDefault(); setButton(btn, false); };
+        btn.addEventListener('touchstart', start, { passive: false });
+        btn.addEventListener('touchend', end, { passive: false });
+        btn.addEventListener('touchcancel', end, { passive: false });
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('mouseup', end);
+        btn.addEventListener('mouseleave', end);
+      }
+
+      setInterval(() => {
+        if (!state.running || state.won || state.lost) return;
+        if (activeActions.has('turnLeft')) state.player.a -= 0.06;
+        if (activeActions.has('turnRight')) state.player.a += 0.06;
+      }, 16);
+    })();
+  </script>
+</body>
+</html>
